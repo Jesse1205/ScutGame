@@ -226,6 +226,7 @@ namespace ZyGames.Framework.Game.Contract
                     var client = _client as SocketRemoteClient;
                     RequestParam heartParam = new RequestParam();
                     heartParam["ActionId"] = (int)ActionEnum.Heartbeat;
+                    heartParam["MsgId"] = 0;
                     string post = string.Format("?d={0}", HttpUtility.UrlEncode(heartParam.ToPostString()));
                     client.HeartPacket = Encoding.ASCII.GetBytes(post);
                 }
