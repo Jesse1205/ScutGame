@@ -1209,13 +1209,14 @@ namespace ZyGames.Framework.Cache.Generic
                         //Not trigger event notify
                         entityData.Dispose();
                     }
-                    return true;
+                    
                 }
                 if (items.Count == 0 && Container.TryRemove(groupKey, out itemSet))
                 {
                     itemSet.ResetStatus();
                     itemSet.Dispose();
                 }
+                return true;
             }
             return false;
         }
