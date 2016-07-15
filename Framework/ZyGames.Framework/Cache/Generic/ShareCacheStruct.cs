@@ -723,7 +723,44 @@ namespace ZyGames.Framework.Cache.Generic
             //        return false;
             //    }
             //}
-            return true;
+            string redisKey = CreateRedisKey(key);
+            TransReceiveParam receiveParam = new TransReceiveParam(redisKey);
+            receiveParam.Schema = SchemaTable();
+            int periodTime = receiveParam.Schema.PeriodTime;
+            int maxCount = receiveParam.Schema.Capacity;
+
+            var provider = Data.DbConnectionProvider.CreateDbProvider(receiveParam.Schema);
+            if (receiveParam.Schema.StorageType.HasFlag(StorageType.ReadOnlyDB) ||
+                receiveParam.Schema.StorageType.HasFlag(StorageType.ReadWriteDB))
+            {
+                if (provider == null)
+                {
+                    TraceLog.WriteError("Not found db connection of {0} entity.", receiveParam.Schema.EntityName);
+                    return false;
+                }
+                var filter = new DbDataFilter(maxCount);
+                if (!string.IsNullOrEmpty(key))
+                {
+                    string[] keyValues = key.Split('-');
+                    for (int i = 0; i < receiveParam.Schema.Keys.Length; i++)
+                    {
+                        filter.Condition = provider.FormatFilterParam(receiveParam.Schema.Keys[i]);
+                        filter.Parameters.Add(receiveParam.Schema.Keys[i], keyValues[i]);
+                    }
+                }
+                receiveParam.DbFilter = filter;
+            }
+
+            List<T> dataList;
+            if (DataContainer.TryReceiveData(receiveParam, out dataList))
+            {
+                InitCache(dataList, periodTime, isReplace);
+                return true;
+            }
+            else
+            {
+                return false;
+            }
         }
 
         /// <summary>
