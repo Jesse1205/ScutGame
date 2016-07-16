@@ -322,24 +322,27 @@ namespace ZyGames.Framework.Cache.Generic
             itemSet = null;
             dynamic entity = null;
             KeyValuePair<string, CacheItemSet> itemPair;
-            if (TryGetCacheItem(redisKey, out itemPair))
+            if (TryGetContainerCacheItem(redisKey, out itemPair))
             {
                 itemSet = itemPair.Value;
-                switch (itemPair.Value.ItemType)
+                if (itemSet != null)
                 {
-                    case CacheType.Entity:
-                        entity = itemPair.Value.ItemData;
-                        break;
-                    case CacheType.Dictionary:
-                        var set = itemPair.Value.ItemData as BaseCollection;
-                        if (set != null)
-                        {
-                            set.TryGetValue(itemPair.Key, out entity);
-                        }
-                        break;
-                    default:
-                        TraceLog.WriteError("Not suported CacheType:{0} for GetPersonalEntity key:{1}", itemPair.Value.ItemType, redisKey);
-                        break;
+                    switch (itemPair.Value.ItemType)
+                    {
+                        case CacheType.Entity:
+                            entity = itemPair.Value.ItemData;
+                            break;
+                        case CacheType.Dictionary:
+                            var set = itemPair.Value.ItemData as BaseCollection;
+                            if (set != null)
+                            {
+                                set.TryGetValue(itemPair.Key, out entity);
+                            }
+                            break;
+                        default:
+                            TraceLog.WriteError("Not suported CacheType:{0} for GetPersonalEntity key:{1}", itemPair.Value.ItemType, redisKey);
+                            break;
+                    }
                 }
             }
             if (entity == null)
@@ -488,6 +491,61 @@ namespace ZyGames.Framework.Cache.Generic
                     });
                     cacheItem = container.Collection.GetOrAdd(entityKey, key => lazy.Value);
 
+                    itemPair = new KeyValuePair<string, CacheItemSet>(entityKey, cacheItem);
+                    return true;
+                }
+                if (schema.CacheType == CacheType.Queue)
+                {
+                    TraceLog.WriteError("Not support CacheType.Queue get cache, key:{0}.", redisKey);
+                }
+
+                ////存在分类id与实体主键相同情况, 要优先判断实体主键
+                //if (!string.IsNullOrEmpty(personalKey) && container.Collection.TryGetValue(entityKey, out cacheItem))
+                //{
+                //    itemPair = new KeyValuePair<string, CacheItemSet>(entityKey, cacheItem);
+                //    return true;
+                //}
+                //if (!string.IsNullOrEmpty(personalKey) && container.Collection.TryGetValue(personalKey, out cacheItem))
+                //{
+                //    itemPair = new KeyValuePair<string, CacheItemSet>(entityKey, cacheItem);
+                //    return true;
+                //}
+
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 获取Container中存在的Cache，不重新创建
+        /// </summary>
+        /// <param name="redisKey"></param>
+        /// <param name="itemPair"></param>
+        /// <param name="periodTime"></param>
+        /// <returns></returns>
+        public static bool TryGetContainerCacheItem(string redisKey, out KeyValuePair<string, CacheItemSet> itemPair, int periodTime = 0)
+        {
+            itemPair = default(KeyValuePair<string, CacheItemSet>);
+            CacheItemSet cacheItem;
+            string[] keys = (redisKey ?? "").Split('_');
+            if (keys.Length == 2 && !string.IsNullOrEmpty(keys[0]))
+            {
+                CacheContainer container = null;
+                string typeName = RedisConnectionPool.DecodeTypeName(keys[0]);
+                var schema = EntitySchemaSet.Get(typeName);
+                periodTime = periodTime > 0 ? periodTime : schema.PeriodTime;
+                if (_writePools != null && !_writePools.TryGetValue(typeName, out container))
+                {
+                    _writePools.InitContainer(typeName);
+                    _writePools.TryGetValue(typeName, out container);
+                }
+                if (container == null) return false;
+
+                string[] childKeys = keys[1].Split('|');
+                string personalKey = childKeys[0];
+                string entityKey = childKeys.Length > 1 ? childKeys[1] : "";
+                if (schema.CacheType == CacheType.Dictionary || schema.CacheType == CacheType.Entity)
+                {
+                    container.Collection.TryGetValue(personalKey, out cacheItem);
                     itemPair = new KeyValuePair<string, CacheItemSet>(entityKey, cacheItem);
                     return true;
                 }
