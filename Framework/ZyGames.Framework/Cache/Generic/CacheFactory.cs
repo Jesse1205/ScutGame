@@ -549,6 +549,12 @@ namespace ZyGames.Framework.Cache.Generic
                     itemPair = new KeyValuePair<string, CacheItemSet>(entityKey, cacheItem);
                     return true;
                 }
+                if (schema.CacheType == CacheType.Entity)
+                {
+                    container.Collection.TryGetValue(entityKey, out cacheItem);
+                    itemPair = new KeyValuePair<string, CacheItemSet>(entityKey, cacheItem);
+                    return true;
+                }
                 if (schema.CacheType == CacheType.Queue)
                 {
                     TraceLog.WriteError("Not support CacheType.Queue get cache, key:{0}.", redisKey);
