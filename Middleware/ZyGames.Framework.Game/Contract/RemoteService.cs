@@ -24,6 +24,7 @@ THE SOFTWARE.
 using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Threading;
 using System.Web;
 using System.Web.UI.WebControls;
 using ZyGames.Framework.Collection.Generic;
@@ -244,8 +245,8 @@ namespace ZyGames.Framework.Game.Contract
         /// <param name="callback"></param>
         public void Call(string routePath, RequestParam param, Action<RemotePackage> callback)
         {
-            _msgId++;
-            param["MsgId"] = _msgId;
+            int msgId = Interlocked.Increment(ref _msgId);
+            param["MsgId"] = msgId;
             param["route"] = routePath;
             param["Sid"] = _sessionId;
             param["Uid"] = _userId;
