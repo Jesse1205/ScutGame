@@ -183,8 +183,8 @@ namespace ZyGames.Framework.Game.Contract.Action
                 {
                     watch.Check("GetResponse");
 
-                    Current.SetExpired();
-                    Current = GameSession.CreateNew(Guid.NewGuid());
+                    //Current.SetExpired();
+                    //Current = GameSession.CreateNew(Guid.NewGuid());
                     Sid = Current.SessionId;//create new
                     PassportId = login.PassportID;
                     UserType = login.UserType;
