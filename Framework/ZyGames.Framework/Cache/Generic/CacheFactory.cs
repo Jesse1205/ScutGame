@@ -543,7 +543,7 @@ namespace ZyGames.Framework.Cache.Generic
                 string[] childKeys = keys[1].Split('|');
                 string personalKey = childKeys[0];
                 string entityKey = childKeys.Length > 1 ? childKeys[1] : "";
-                if (schema.CacheType == CacheType.Dictionary || schema.CacheType == CacheType.Entity)
+                if (schema.CacheType == CacheType.Dictionary)//|| schema.CacheType == CacheType.Entity)
                 {
                     container.Collection.TryGetValue(personalKey, out cacheItem);
                     itemPair = new KeyValuePair<string, CacheItemSet>(entityKey, cacheItem);
