@@ -96,6 +96,7 @@ namespace ZyGames.Framework.Game.Contract
         protected GameSocketHost()
             : this(new RequestHandler(new MessageHandler()))
         {
+            MainLoop.SetSocketHost(this, OnSendCompleted, OnRequested);
         }
 
         /// <summary>
@@ -200,6 +201,7 @@ namespace ZyGames.Framework.Game.Contract
                     return;
                 }
                 package.Bind(session);
+                //MainLoop.TryEnqueue(package);
                 ProcessPackage(package, session).Wait();
             }
             catch (Exception ex)
