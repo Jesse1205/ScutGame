@@ -1,27 +1,4 @@
-﻿/****************************************************************************
-Copyright (c) 2013-2015 scutgame.com
-
-http://www.scutgame.com
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-****************************************************************************/
-using System;
+﻿using System;
 using System.IO;
 using System.Net;
 using System.Threading;
@@ -34,14 +11,20 @@ using ZyGames.Framework.Game.Service;
 using ZyGames.Framework.RPC.Http;
 using ZyGames.Framework.RPC.Sockets;
 using ZyGames.Framework.RPC.IO;
+using System.Collections.Concurrent;
 
 namespace ZyGames.Framework.Game.Contract
 {
     /// <summary>
     /// 游戏服Socket通讯宿主基类
     /// </summary>
-    public abstract class GameSocketHost : GameBaseHost
+    public abstract class GameSocketHostLoop : GameBaseHost
     {
+        private static ConcurrentQueue<RequestPackage> _sendQueue;
+        private static Thread _queueProcessThread;
+        private static ManualResetEvent singal = new ManualResetEvent(false);
+        private static int _runningQueue;
+
         //private SmartThreadPool threadPool;
         private SocketListener socketListener;
         private HttpListener httpListener;
@@ -93,7 +76,7 @@ namespace ZyGames.Framework.Game.Contract
         /// <summary>
         /// 
         /// </summary>
-        protected GameSocketHost()
+        protected GameSocketHostLoop()
             : this(new RequestHandler(new MessageHandler()))
         {
             
@@ -102,7 +85,7 @@ namespace ZyGames.Framework.Game.Contract
         /// <summary>
         /// 
         /// </summary>
-        protected GameSocketHost(RequestHandler requestHandler)
+        protected GameSocketHostLoop(RequestHandler requestHandler)
         {
             _setting = GameEnvironment.Setting;
             int port = _setting != null ? _setting.GamePort : 0;
@@ -151,6 +134,57 @@ namespace ZyGames.Framework.Game.Contract
                     httpListener.Prefixes.Add(string.Format("{0}:{1}/{2}/", address, hport, httpName));
                 }
             }
+
+            _sendQueue = new ConcurrentQueue<RequestPackage>();
+            Interlocked.Exchange(ref _runningQueue, 1);
+            _queueProcessThread = new Thread(ProcessQueue);
+            _queueProcessThread.Start();
+        }
+
+        private void ProcessQueue(object state)
+        {
+            while (_runningQueue == 1)
+            {
+                singal.WaitOne();
+                if (_runningQueue == 1)
+                {
+                    Thread.Sleep(5);//Delay 5ms
+                }
+                while (_runningQueue == 1)
+                {
+                    RequestPackage package;
+                    if (_sendQueue.TryDequeue(out package))
+                    {
+                        GameSession session = GameSession.Get(package.SessionId);
+                        ProcessPackage(package, session).Wait();
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+                singal.Reset();
+            }
+        }
+
+        public static void Dispose()
+        {
+            Interlocked.Exchange(ref _runningQueue, 0);
+            try
+            {
+                singal.Set();
+                singal.Dispose();
+                _queueProcessThread.Abort();
+            }
+            catch
+            {
+            }
+        }
+
+        private void TryEnqueue(RequestPackage package)
+        {
+            _sendQueue.Enqueue(package);
+            singal.Set();
         }
 
         private void socketLintener_OnConnectCompleted(object sender, ConnectionEventArgs e)
@@ -201,7 +235,8 @@ namespace ZyGames.Framework.Game.Contract
                     return;
                 }
                 package.Bind(session);
-                ProcessPackage(package, session).Wait();
+                TryEnqueue(package);
+                //ProcessPackage(package, session).Wait();
             }
             catch (Exception ex)
             {

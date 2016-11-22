@@ -147,6 +147,7 @@
     <Compile Include="Contract\GameHttpHost.cs" />
     <Compile Include="Contract\GameSession.cs" />
     <Compile Include="Contract\GameSocketHost.cs" />
+    <Compile Include="Contract\GameSocketHostLoop.cs" />
     <Compile Include="Contract\GameWebSocketHost.cs" />
     <Compile Include="Contract\HttpGet.cs" />
     <Compile Include="Contract\PackageReader.cs" />
