@@ -12,6 +12,7 @@ using ZyGames.Framework.RPC.Http;
 using ZyGames.Framework.RPC.Sockets;
 using ZyGames.Framework.RPC.IO;
 using System.Collections.Concurrent;
+using ZyGames.Framework.Common.Timing;
 
 namespace ZyGames.Framework.Game.Contract
 {
@@ -20,11 +21,6 @@ namespace ZyGames.Framework.Game.Contract
     /// </summary>
     public abstract class GameSocketHostLoop : GameBaseHost
     {
-        private static ConcurrentQueue<RequestPackage> _sendQueue;
-        private static Thread _queueProcessThread;
-        private static ManualResetEvent singal = new ManualResetEvent(false);
-        private static int _runningQueue;
-
         //private SmartThreadPool threadPool;
         private SocketListener socketListener;
         private HttpListener httpListener;
@@ -135,57 +131,10 @@ namespace ZyGames.Framework.Game.Contract
                 }
             }
 
-            _sendQueue = new ConcurrentQueue<RequestPackage>();
-            Interlocked.Exchange(ref _runningQueue, 1);
-            _queueProcessThread = new Thread(ProcessQueue);
-            _queueProcessThread.Start();
+            MainLoop.SetGameHost(this);
         }
 
-        private void ProcessQueue(object state)
-        {
-            while (_runningQueue == 1)
-            {
-                singal.WaitOne();
-                if (_runningQueue == 1)
-                {
-                    Thread.Sleep(5);//Delay 5ms
-                }
-                while (_runningQueue == 1)
-                {
-                    RequestPackage package;
-                    if (_sendQueue.TryDequeue(out package))
-                    {
-                        GameSession session = GameSession.Get(package.SessionId);
-                        ProcessPackage(package, session).Wait();
-                    }
-                    else
-                    {
-                        break;
-                    }
-                }
-                singal.Reset();
-            }
-        }
-
-        public static void Dispose()
-        {
-            Interlocked.Exchange(ref _runningQueue, 0);
-            try
-            {
-                singal.Set();
-                singal.Dispose();
-                _queueProcessThread.Abort();
-            }
-            catch
-            {
-            }
-        }
-
-        private void TryEnqueue(RequestPackage package)
-        {
-            _sendQueue.Enqueue(package);
-            singal.Set();
-        }
+        
 
         private void socketLintener_OnConnectCompleted(object sender, ConnectionEventArgs e)
         {
@@ -235,7 +184,7 @@ namespace ZyGames.Framework.Game.Contract
                     return;
                 }
                 package.Bind(session);
-                TryEnqueue(package);
+                MainLoop.TryEnqueue(package);
                 //ProcessPackage(package, session).Wait();
             }
             catch (Exception ex)
@@ -284,12 +233,12 @@ namespace ZyGames.Framework.Game.Contract
         {
         }
 
-        private async System.Threading.Tasks.Task ProcessPackage(RequestPackage package, GameSession session)
+        public void ProcessPackage(RequestPackage package, GameSession session)
         {
             if (package == null) return;
-
             try
             {
+                var watch = RunTimeWatch.StartNew(string.Format("当前线程{0},{1}协议执行时间", Thread.CurrentThread.ManagedThreadId, package.ActionId));
                 ActionGetter actionGetter;
                 byte[] data = new byte[0];
                 if (!string.IsNullOrEmpty(package.RouteName))
@@ -318,14 +267,14 @@ namespace ZyGames.Framework.Game.Contract
                 {
                     if (session != null && data.Length > 0)
                     {
-                        await session.SendAsync(actionGetter.OpCode, data, 0, data.Length, OnSendCompleted);
+                        session.SendAsync(actionGetter.OpCode, data, 0, data.Length, OnSendCompleted);
                     }
                 }
                 catch (Exception ex)
                 {
                     TraceLog.WriteError("PostSend error:{0}", ex);
                 }
-
+                watch.Flush(true);
             }
             catch (Exception ex)
             {
@@ -575,4 +524,76 @@ namespace ZyGames.Framework.Game.Contract
             }
         }
     }
+
+    /// <summary>
+    /// 主循环
+    /// </summary>
+    public class MainLoop
+    {
+        private static ConcurrentQueue<RequestPackage> _sendQueue;
+        private static Thread _queueProcessThread;
+        private static ManualResetEvent singal = new ManualResetEvent(false);
+        private static int _runningQueue;
+        private static GameSocketHostLoop gameHost;
+
+        static MainLoop()
+        {
+            _sendQueue = new ConcurrentQueue<RequestPackage>();
+            Interlocked.Exchange(ref _runningQueue, 1);
+            _queueProcessThread = new Thread(ProcessQueue);
+            _queueProcessThread.Start();
+        }
+
+        public static void SetGameHost(GameSocketHostLoop host)
+        {
+            gameHost = host;
+        }
+
+        private static void ProcessQueue(object state)
+        {
+            while (_runningQueue == 1)
+            {
+                singal.WaitOne();
+                if (_runningQueue == 1)
+                {
+                    Thread.Sleep(5);//Delay 5ms
+                }
+                while (_runningQueue == 1)
+                {
+                    RequestPackage package;
+                    if (_sendQueue.TryDequeue(out package))
+                    {
+                        GameSession session = GameSession.Get(package.SessionId);
+                        gameHost.ProcessPackage(package, session);//.Wait();
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+                singal.Reset();
+            }
+        }
+
+        public static void Dispose()
+        {
+            Interlocked.Exchange(ref _runningQueue, 0);
+            try
+            {
+                singal.Set();
+                singal.Dispose();
+                _queueProcessThread.Abort();
+            }
+            catch
+            {
+            }
+        }
+
+        public static void TryEnqueue(RequestPackage package)
+        {
+            _sendQueue.Enqueue(package);
+            singal.Set();
+        }
+    }
+
 }
