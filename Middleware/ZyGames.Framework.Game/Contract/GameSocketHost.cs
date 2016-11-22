@@ -201,8 +201,8 @@ namespace ZyGames.Framework.Game.Contract
                     return;
                 }
                 package.Bind(session);
-                //MainLoop.TryEnqueue(package);
-                ProcessPackage(package, session).Wait();
+                MainLoop.TryEnqueue(package);
+                //ProcessPackage(package, session).Wait();
             }
             catch (Exception ex)
             {
