@@ -545,15 +545,15 @@ namespace ZyGames.Framework.Cache.Generic
                 string entityKey = childKeys.Length > 1 ? childKeys[1] : "";
                 if (schema.CacheType == CacheType.Dictionary)//|| schema.CacheType == CacheType.Entity)
                 {
-                    container.Collection.TryGetValue(personalKey, out cacheItem);
+                    var result = container.Collection.TryGetValue(personalKey, out cacheItem);
                     itemPair = new KeyValuePair<string, CacheItemSet>(entityKey, cacheItem);
-                    return true;
+                    return result;
                 }
                 if (schema.CacheType == CacheType.Entity)
                 {
-                    container.Collection.TryGetValue(entityKey, out cacheItem);
+                    var result = container.Collection.TryGetValue(entityKey, out cacheItem);
                     itemPair = new KeyValuePair<string, CacheItemSet>(entityKey, cacheItem);
-                    return true;
+                    return result;
                 }
                 if (schema.CacheType == CacheType.Queue)
                 {
