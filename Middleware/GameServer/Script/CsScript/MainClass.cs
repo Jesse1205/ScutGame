@@ -25,7 +25,7 @@ using System;
 using ZyGames.Framework.Game.Contract;
 using ZyGames.Framework.Game.Runtime;
 using ZyGames.Framework.Script;
-
+using GameServer.CsScript.Logic;
 namespace Game.Script
 {
     public class MainClass : GameSocketHost, IMainScript
@@ -36,6 +36,7 @@ namespace Game.Script
 
         protected override void OnStartAffer()
         {
+            GMService.Current.Start("http://127.0.0.1", 8080, "Service");
         }
 
         protected override void OnServiceStop()
